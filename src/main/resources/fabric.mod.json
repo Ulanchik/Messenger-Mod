@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "messengermod",
+	"version": "${version}",
+	"name": "MessengerMod",
+	"description": "Fabric мод для обмена сообщениями через Protobuf с сохранением в PostgreSQL",
+	"authors": [
+		"MessengerMod Team"
+	],
+	"contact": {
+		"homepage": "https://github.com/your-repo/messenger-mod",
+		"sources": "https://github.com/your-repo/messenger-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/messengermod/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"ru.minecraft.messenger.MessengerMod"
+		],
+		"client": [
+			"ru.minecraft.messenger.MessengerModClient"
+		]
+	},
+
+	"depends": {
+		"fabricloader": ">=0.17.3",
+		"minecraft": "~1.21.8",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"postgresql": "Для работы с базой данных"
+	}
+}
