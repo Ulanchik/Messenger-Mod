@@ -84,10 +84,15 @@ src/
 ### Protobuf схема
 
 ```protobuf
+syntax = "proto3";
+
 message Message {
-    string text = 1;
+  string text = 1;
 }
+
 ```
+
+
 
 ### Структура БД
 
@@ -98,6 +103,24 @@ CREATE TABLE messages (
     text VARCHAR(256) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+```
+
+## Работа с базой данных
+
+Конфигурация подключения к PostgreSQL хранится в `persistence.xml` или в отдельном конфигурационном классе.  
+**Важно:** не храните реальные учетные данные (логин, пароль, URL базы) в публичном репозитории.
+
+Рекомендуется:
+
+- Использовать **переменные окружения** для логина, пароля и URL базы.
+- В репозиторий пушить **шаблонный `persistence.xml`** или пример конфигурации, например:
+
+```xml
+<properties>
+    <property name="jakarta.persistence.jdbc.url" value="jdbc:postgresql://<HOST>:<PORT>/<DB_NAME>"/>
+    <property name="jakarta.persistence.jdbc.user" value="<USERNAME>"/>
+    <property name="jakarta.persistence.jdbc.password" value="<PASSWORD>"/>
+</properties>
 ```
 
 ### Сетевые пакеты

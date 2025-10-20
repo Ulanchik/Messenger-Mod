@@ -1,0 +1,187 @@
+plugins {
+	// Loom должен быть первой строкой для правильной инициализации среды
+	id 'fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+	// Плагины для Protobuf и Lombok
+	id 'com.google.protobuf' version '0.9.4'
+	id 'io.freefair.lombok' version '8.10'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+// ==========================================================
+// *** РЕПОЗИТОРИИ ***
+// ==========================================================
+repositories {
+	mavenCentral()
+	maven { url = "https://maven.fabricmc.net/" }
+	maven { url = "https://maven.terraformersmc.com/releases/" }
+	maven { url = "https://repo1.maven.org/maven2/" }
+}
+
+// ==========================================================
+// *** НАСТРОЙКИ LOOM ***
+// ==========================================================
+loom {
+	// Разделение основного и клиентского кода (для Fabric)
+	splitEnvironmentSourceSets()
+
+	mods {
+		"messengermod" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+sourceSets {
+	main {
+		java {
+			// Добавление сгенерированного Protobuf-кода в основной SourceSet
+			srcDir 'build/generated/source/proto/main/java'
+		}
+	}
+	client {
+		compileClasspath += main.output
+		runtimeClasspath += main.output
+		java {
+			// Добавление сгенерированного Protobuf-кода в клиентский SourceSet
+			srcDir 'build/generated/source/proto/main/java'
+		}
+	}
+}
+
+// ==========================================================
+// *** ЗАВИСИМОСТИ ***
+// ==========================================================
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+	// Protobuf (Google Official)
+	implementation 'com.google.protobuf:protobuf-java:3.25.3'
+
+	// Hibernate, PostgreSQL и Jakarta Persistence API (для БД)
+	implementation 'org.hibernate:hibernate-core:6.4.4.Final'
+	implementation 'org.postgresql:postgresql:42.7.3'
+	implementation 'jakarta.persistence:jakarta.persistence-api:3.1.0'
+
+	// Lombok (для @Slf4j, @Data и т.д.)
+	compileOnly 'org.projectlombok:lombok:1.18.34'
+	annotationProcessor 'org.projectlombok:lombok:1.18.34'
+
+	// Логирование (Slf4j и Logback)
+	implementation 'org.slf4j:slf4j-api:2.0.16'
+	implementation 'ch.qos.logback:logback-classic:1.5.6'
+	implementation 'ch.qos.logback:logback-core:1.5.6'
+}
+
+
+// ==========================================================
+// *** СЕКЦИЯ КОНФИГУРАЦИИ PROTOBUF ***
+// ==========================================================
+protobuf {
+	protoc {
+		artifact = 'com.google.protobuf:protoc:3.25.3'
+	}
+	generateProtoTasks {
+		all().each { task ->
+			task.builtins {
+				java {
+					// Генерируем код с настройками по умолчанию
+				}
+			}
+		}
+	}
+}
+// ==========================================================
+
+
+processResources {
+	inputs.property "version", project.version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": inputs.properties.version
+	}
+}
+
+// ==========================================================
+// *** НАСТРОЙКИ КОМПИЛЯЦИИ JAVA ***
+// ==========================================================
+tasks.withType(JavaCompile).configureEach {
+	// Требуется Java 21 для Minecraft 1.21+ и Hibernate 6+
+	it.options.release = 21
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}
+
+sourcesJar {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+jar {
+	inputs.property "archivesName", project.base.archivesName
+
+	from("LICENSE") {
+		rename { "${it}_${inputs.properties.archivesName}"}
+	}
+
+	// Обрабатываем дубликаты
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+
+// ==========================================================
+// *** КРИТИЧЕСКАЯ СЕКЦИЯ: ИСПРАВЛЕНИЕ ЗАВИСИМОСТЕЙ ***
+// ----------------------------------------------------------
+// Используем afterEvaluate для настройки задач, созданных плагинами.
+afterEvaluate {
+	// Получаем задачу генерации Protobuf для основного кода (main source set)
+	def generateMainProtoTask = tasks.named('generateProto')
+
+	// 1. ИСПРАВЛЕНИЕ LOMBOK/PROTOBUF КОНФЛИКТА (Устраняет ошибку "Task not found" и "Problem with location")
+	if (tasks.findByName('generateClientEffectiveLombokConfig')) {
+		tasks.named('generateClientEffectiveLombokConfig').configure {
+			// Lombok должен запускаться только после завершения генерации Protobuf
+			mustRunAfter(generateMainProtoTask)
+		}
+	}
+
+	// 2. РАЗРЫВ ЦИКЛИЧЕСКОЙ ЗАВИСИМОСТИ и НАДЕЖНАЯ КОМПИЛЯЦИЯ:
+	// Все Java-коды (main, client) зависят только от генерации ОСНОВНОГО Protobuf-кода.
+	tasks.withType(JavaCompile).configureEach {
+		// Это должно устранить циклические зависимости, связанные с тестовыми задачами.
+		dependsOn generateMainProtoTask
+	}
+
+	// 3. JAR dependency: Гарантируем, что Protobuf-файлы включены в JAR
+	tasks.named('jar').configure {
+		dependsOn generateMainProtoTask
+	}
+}
+// ==========================================================
+
+
+// configure the maven publication
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			artifactId = project.archives_base_name
+			from components.java
+		}
+	}
+
+	repositories {
+	}
+}
